@@ -38,11 +38,7 @@ In this project, our goal is to:
         <li>Apply smoothing to draw only smooth lanes.</li>
     </ul>
 
-Below, I will go through each step of the pipeline.
-
-### Pipeline
-
-The Pipeline consists of 10 steps:
+The pipeline consists of 10 steps:
     <ol>
         <li>Get the lane info in the image.</li>
         <li>Remove noise from the image using Gaussian Blur Filter.</li>
@@ -54,6 +50,8 @@ The Pipeline consists of 10 steps:
         <li>Draw Lanes</li>
         <li>Merge results in the original image</li>
     </ol>
+
+
 ## Step 1: Get the Lane info in the image:
 
 First thing first, the original sample images look like:
@@ -94,28 +92,36 @@ At this point, I merged the results of both the white and yellow masks using bit
 ```
 ![alt text][image7]
 
+
 ## Step 2: Remove noise from the image using Gaussian Blur Filter
 
 Guassian Blur Filter is used to remove the noise from the image.
 ```python
+def remove_image_noise(image, kernel=(3, 3)):
     filtered_image = cv.GaussianBlur(image,  # source
                                      kernel,  # kernel size
                                      0)  # border type
+    return filtered_image
 ```                                     
 ![alt text][image9]
 ![alt text][image10]
 
+
 ## Step 3: Get the edges in the images using Canny Edge Detector
 ```python
+def get_edges(image, low, high):
     edges = cv.Canny(image,
                      low,  # low threshold
                      high)  # high threshold
+    return edges
 ```                
 ![alt text][image11]
 ![alt text][image12]
 
+
 ## Step 4: Remove edges outside of the ROI
 ```python
+def get_masked_edges(width, height_bottom, height_top, edges, ignore_mask_color=255):
     # blank matrix
     mask = np.zeros_like(edges)
     # ROI vertices
@@ -124,23 +130,21 @@ Guassian Blur Filter is used to remove the noise from the image.
                           (2 * width / 3., height_top),  # right top
                           (width * 0.95, height_bottom)]],  # right bottom
                         dtype=np.int32)
-    
     # create ROI
-    cv.fillPoly(mask,  # image
-                vertices,  # coordinates
-                ignore_mask_color)
+    cv.fillPoly(mask, vertices, ignore_mask_color)
     # remove the parts of image which are not within ROI - bitwise AND
     masked_edges = cv.bitwise_and(edges, mask)
+    return masked_edges
 ```
 ![alt text][image13]
+
 
 ## Step 5: Find Lines using Probabilistic Hough Line Transform: 
 
 Then, Probabilistic Hough Line Transform is used to get the lines.
 ```python
-    return cv.HoughLinesP(image,  # source
-                          rho,
-                          theta * np.pi / 180,  # degree to radian
+def get_hough_lines(image, rho=2, theta=1, voting=25, min_line_length=20, max_line_gap=1):
+    return cv.HoughLinesP(image, rho, theta * np.pi / 180,  # degree to radian
                           voting,  # minimum voting in hough accumulator
                           min_line_length,  # min line length in pixels
                           max_line_gap  # gap b/w lines in pixels
@@ -150,14 +154,11 @@ Then, Probabilistic Hough Line Transform is used to get the lines.
 ![alt text][image15]
 ![alt text][image15-2]
 
+
 ## Step 6: Find smooth lanes using Weighted Arithmetic Mean
 
 ```python
 def get_weighted_lanes(detected_lines):
-    # hough line transform provides several detected lines
-    # we want to reduce all the to just 2 lines
-    # lines will be weighted w.r.t the length of the lines
-    # resultant lines are called lanes (left and right)
     right_slope_intercept = []
     right_length = []
     left_slope_intercept = []
@@ -189,6 +190,7 @@ def get_weighted_lanes(detected_lines):
     return left, right
 ```
 
+
 ## Step 7: Find the coordinates of the lanes:
 
 At this point, we have the slopes and the intercepts of both lanes. Now we need to calculates the start and end coordinates for both lanes.
@@ -215,7 +217,6 @@ def get_coordinates(height_bottom, height_top, left, right):
 ![alt text][image16]
 ![alt text][image17]
 
-In order to draw a single line on the left and right lanes, I modified the draw_lines() function by ...
 
 ## Step 8: Draw Lanes:
 
@@ -224,21 +225,16 @@ def draw_weighted_lanes(edges, left_coordinates, right_coordinates,
                         color=(0, 0, 255), thickness=5):
     lane_image = np.zeros((edges.shape[0],  # --> height
                            edges.shape[1],  # --> width
-                           3),
-                          dtype=np.uint8)
+                           3), dtype=np.uint8)
     for coordinates in (left_coordinates, right_coordinates):
         start_coordinate, end_coordinate = coordinates
         cv.line(lane_image,  # source
-                start_coordinate,  # (x1, y1)
-                end_coordinate,  # (x2, y2)
-                color,  # RGB color --> red
-                thickness  # line thickness
+                start_coordinate, end_coordinate,  # (x2, y2)
+                color, thickness
                 )
-    if SHOW_DEBUG_IMAGES:
-        save_image(lane_image, "11-lanes")
-        plt.imshow(lane_image)
     return lane_image 
 ```
+
 
 ## Step 9: Merge results in the original image
 
@@ -251,7 +247,6 @@ def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
                                gamma)  # scalar added to each sum
     save_image(resultant, "12-resultant")
     return resultant
-
 ```
 
 ![alt text][image18]
