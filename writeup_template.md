@@ -39,15 +39,15 @@
 
 In this project, our goal is to:
     <ul>
-        <li>Find the lanes in the images.</li>
-        <li>Apply smoothing to draw only smooth lanes.</li>
+        <li>Find the lane lines on the roads.</li>
+        <li>Apply smoothing to draw only the smooth left and right lanes.</li>
     </ul>
 
 ## The Pipeline:
 
 <br />
 
-The pipeline consists of 10 steps:
+The pipeline consists of 9 steps:
     <ol>
         <li>Get the lane info in the image.</li>
         <li>Remove noise from the image using Gaussian Blur Filter.</li>
@@ -172,6 +172,9 @@ def get_masked_edges(width, height_bottom, height_top, edges, ignore_mask_color=
 #### Step 5: Find Lines using Probabilistic Hough Line Transform: 
 
 Then, Probabilistic Hough Line Transform is used to get the lines. It provides the start and end points of each detected line.
+
+[http://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html]
+
 ```python
 def get_hough_lines(image, rho=2, theta=1, voting=25, min_line_length=20, max_line_gap=1):
     return cv.HoughLinesP(image, rho, theta * np.pi / 180,  # degree to radian
@@ -194,7 +197,10 @@ Since Hough lines vary in length, the most important and useful line are those w
 
 [https://en.wikipedia.org/wiki/Weighted_arithmetic_mean]
 
-The weighted average can be used where the line length can be used as a weight.
+The weighted average can be used where the line length can be used as a weight. Numpy dot operator is used to find sum of prodcut (sop) and then the sum is averaged by weights (length of the lines).
+
+[https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html]
+
 ```python
 def get_weighted_lanes(detected_lines):
     right_slope_intercept = []
