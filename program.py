@@ -1,13 +1,40 @@
 import numpy as np
 import cv2 as cv
+import fnmatch
 import time
+import os
 
 SHOW_DEBUG_IMAGES = False
+SAVE_PIPELINE_IMAGES = False
+left_slope_history = []
+left_intercept_history = []
+right_slope_history = []
+right_intercept_history = []
+
+
+def save_history(left, right):
+    if left is not None:
+        left_slope_history.append(left[0])
+        left_intercept_history.append(left[1])
+    if right is not None:
+        right_slope_history.append(right[0])
+        right_intercept_history.append(right[1])
+
+
+def fetch_images_from_folder(folder):
+    _images = []
+    for root, dir_names, file_names in os.walk(folder):
+        for filename in fnmatch.filter(file_names, '*.jpg'):
+            img = cv.imread(os.path.join(folder, os.path.join(root, filename)))
+            if img is not None:
+                _images.append(img)
+    return _images
 
 
 def save_image(image, name="unknown", path="result_images/"):
-    stamp = str(int(time.time()))
-    cv.imwrite(path + name + "-" + stamp + ".jpg", image)
+    if SAVE_PIPELINE_IMAGES:
+        stamp = str(int(time.time()))
+        cv.imwrite(path + name + "-" + stamp + ".jpg", image)
 
 
 def perform_lane_detection(path="test_videos/challenge.mp4"):
@@ -21,7 +48,7 @@ def perform_lane_detection(path="test_videos/challenge.mp4"):
 
 
 def get_height_width(image):
-    return image.shape[1], image.shape[0], image.shape[0] * .62
+    return image.shape[1], image.shape[0], image.shape[0] * .61
 
 
 def get_masked_image(image):
@@ -80,8 +107,8 @@ def get_masked_edges(width, height_bottom, height_top, edges, ignore_mask_color=
     mask = np.zeros_like(edges)
     # ROI vertices
     vertices = np.array([[(width * 0.05, height_bottom),  # left bottom
-                          (width / 4., height_top),  # left top
-                          (3 * width / 4., height_top),  # right top
+                          (width / 3., height_top),  # left top
+                          (2 * width / 3., height_top),  # right top
                           (width * 0.95, height_bottom)]],  # right bottom
                         dtype=np.int32)
     # create ROI
@@ -99,8 +126,8 @@ def get_masked_edges(width, height_bottom, height_top, edges, ignore_mask_color=
     return masked_edges
 
 
-def get_hough_lines(image, rho=2, theta=1, voting=15,
-                    min_line_length=10, max_line_gap=1):
+def get_hough_lines(image, rho=2, theta=1, voting=25,
+                    min_line_length=20, max_line_gap=1):
     return cv.HoughLinesP(image,  # source
                           rho,
                           theta * np.pi / 180,  # degree to radian
@@ -136,20 +163,20 @@ def get_weighted_lanes(detected_lines):
             # in openCV, image is a matrix
             # bottom y values are higher than top y values
             # it means slope is negative for left line
-
             # left slope = delta_y --> -ve, delta_x --> +ve
             # right slope = delta_y --> -ve, delta_x --> -ve
+            print("line length:", line_length)
             if line_slope < 0:
                 left_slope_intercept.append((line_slope, line_intercept))
                 left_length.append(line_length)
-            else:
+            elif line_slope > 0:
                 right_slope_intercept.append((line_slope, line_intercept))
                 right_length.append(line_length)
 
     # weighted mean
     # https://en.wikipedia.org/wiki/Weighted_arithmetic_mean
     # simple arithmetic mean doesn't take into account the ...
-    # ...significance of individual lines which causes fluctuation & noise
+    # ...significance of individual lines, which causes fluctuation & noise
     # length of each line can be used as a weight
     # weight average --> (sum of product) / (sum of weight)
     # sop --> sum of product
@@ -158,32 +185,64 @@ def get_weighted_lanes(detected_lines):
     left_weight = np.sum(left_length)
     right_weight = np.sum(right_length)
     # handling cases when no line is detected by hough transform
-    left = (sop_left / left_weight) if len(left_length) > 0 else None
-    right = (sop_right / right_weight) if len(right_length) > 0 else None
+    left_bound = len(left_length) > 0 and sop_left[0] < -0.5
+    right_bound = len(right_length) > 0 and sop_right[0] > 0.5
 
+    left = (sop_left / left_weight) if left_bound else None
+    right = (sop_right / right_weight) if right_bound else None
+    save_history(left, right)
     # resultant is 2 lanes out of several hough lines
     return left, right
 
 
 def get_coordinates(height_bottom, height_top, left, right):
-    # start and end x coordinates for left lane
+    # there are cases when no no line is detected by hough
+    # in that case we can use the history of slope and intercept
+    # and get the average values from the history
+    # but since lane might be changing between the frames
+    # so just get average of last 10 values
+    if left is None:
+        left = [np.mean(left_slope_history[-10:]),
+                np.mean(left_intercept_history[-10:])]
+    if right is None:
+        right = [np.mean(right_slope_history[-10:]),
+                 np.mean(right_intercept_history[-10:])]
+
+    # start and end x coordinates for the lane
     # x --> (y - intercept) / slope
     slope, intercept = left
-    left_x1 = int((height_bottom - intercept) / slope)
-    left_x2 = int((height_top - intercept) / slope)
-    # start and end x coordinates for right lane
+    x_l1 = int((height_bottom - intercept) / slope)
+    x_l2 = int((height_top - intercept) / slope)
+
     slope, intercept = right
-    right_x1 = int((height_bottom - intercept) / slope)
-    right_x2 = int((height_top - intercept) / slope)
+    x_r1 = int((height_bottom - intercept) / slope)
+    x_r2 = int((height_top - intercept) / slope)
     # y coordinates
     y1 = int(height_bottom)
     y2 = int(height_top)
+    return ((x_l1, y1), (x_l2, y2)), ((x_r1, y1), (x_r2, y2))
 
-    return ((left_x1, y1), (left_x2, y2)), ((right_x1, y1), (right_x2, y2))
+
+def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
+    # creating a blank to draw lines on
+    lane_image = np.zeros((edges.shape[0],  # --> height
+                           edges.shape[1],  # --> width
+                           3),
+                          dtype=np.uint8)
+    for line in lines:
+        for x1, y1, x2, y2 in line:
+            cv.line(lane_image,  # source
+                    (x1, y1),  # (x1, y1)
+                    (x2, y2),  # (x2, y2)
+                    color,  # BGR color --> red
+                    thickness  # line thickness
+                    )
+    cv.imshow("hough line", lane_image)
+    return lane_image
 
 
-def draw_lanes(edges, left_coordinates, right_coordinates,
-               color=(0, 0, 255), thickness=5):
+def draw_weighted_lanes(edges, left_coordinates, right_coordinates,
+                        color=(0, 0, 255), thickness=5):
     # creating a blank to draw lines on
     lane_image = np.zeros((edges.shape[0],  # --> height
                            edges.shape[1],  # --> width
@@ -197,8 +256,9 @@ def draw_lanes(edges, left_coordinates, right_coordinates,
                 color,  # BGR color --> red
                 thickness  # line thickness
                 )
-    save_image(lane_image, "11-lanes")
-    cv.imshow("smooth lines", lane_image)
+    if SHOW_DEBUG_IMAGES:
+        save_image(lane_image, "11-lanes")
+        cv.imshow("smooth lines", lane_image)
     return lane_image
 
 
@@ -215,7 +275,6 @@ def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
 def lanes_detection(image):
     # STEP - 0: resize frame to better visualize
     image = cv.resize(image, None, fx=0.5, fy=0.6, interpolation=cv.INTER_LINEAR)
-    save_image(image, "original")
     # STEP - 1: get the width and height of image
     width, height_bottom, height_top = get_height_width(image)
     # STEP - 2: get the white and yellow lanes from the image
@@ -231,14 +290,12 @@ def lanes_detection(image):
     # STEP - 7: get left and right lanes from several hough lines
     left_lane, right_lane = get_weighted_lanes(hough_lines)
     # STEP - 8: get the coordinates of the left and right lanes
-    left_coordinates, right_coordinates = get_coordinates(height_bottom,
-                                                          height_top,
-                                                          left_lane,
-                                                          right_lane)
+    left_coordinates, right_coordinates = get_coordinates(height_bottom, height_top, left_lane, right_lane)
     # STEP - 9: draw lanes on a blank image
-    lane_image = draw_lanes(masked_edges, left_coordinates, right_coordinates)
+    lane_image = draw_weighted_lanes(masked_edges, left_coordinates, right_coordinates)
     # STEP - 10: draw lanes on original image
     weighted_image = get_resultant_image(lane_image, image)
+    # save_input_image(weighted_image, "hough", "result_images/")
     cv.imshow("result", weighted_image)
     cv.waitKey(1)
 

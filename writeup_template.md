@@ -1,8 +1,5 @@
 # **Finding Lane Lines on the Road** 
 
-## Writeup Template
-
-### You can use this file as a template for your writeup if you want to submit it as a markdown file. But feel free to use some other method and submit a pdf if you prefer.
 
 ---
 
@@ -46,6 +43,7 @@ The goals / steps of this project are the following:
 [image20]: ./results/12-resultant-1496135364.jpg "Result"
 
 ---
+### Pipeline
 
 ### Reflection
 
