@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import imageio
 import cv2 as cv
 import fnmatch
 import time
@@ -21,16 +24,6 @@ def save_history(left, right):
         right_intercept_history.append(right[1])
 
 
-def fetch_images_from_folder(folder):
-    _images = []
-    for root, dir_names, file_names in os.walk(folder):
-        for filename in fnmatch.filter(file_names, '*.jpg'):
-            img = cv.imread(os.path.join(folder, os.path.join(root, filename)))
-            if img is not None:
-                _images.append(img)
-    return _images
-
-
 def save_image(image, name="unknown", path="result_images/"):
     if SAVE_PIPELINE_IMAGES:
         stamp = str(int(time.time()))
@@ -38,17 +31,13 @@ def save_image(image, name="unknown", path="result_images/"):
 
 
 def perform_lane_detection(path="test_videos/challenge.mp4"):
-    video_cap = cv.VideoCapture(path)
-    while video_cap.isOpened():
-        success, frame = video_cap.read()
-        if not success:
-            print("cannot read frame")
-            return -1
+    video_cap = imageio.get_reader(path)
+    for frame in video_cap:
         lanes_detection(frame)
 
 
 def get_height_width(image):
-    return image.shape[1], image.shape[0], image.shape[0] * .61
+    return image.shape[1], image.shape[0], image.shape[0] * .65
 
 
 def get_masked_image(image):
@@ -78,7 +67,7 @@ def get_masked_image(image):
         save_image(mask_white, "03-white")
         save_image(mask_hsv, "04-mask hsv")
         save_image(mask_hsv, "05-mask hsv")
-        cv.imshow("06-masked image", masked_image)
+        plt.imshow(masked_image)
     return masked_image
 
 
@@ -88,7 +77,7 @@ def remove_image_noise(image, kernel=(3, 3)):
                                      0)  # border type
     if SHOW_DEBUG_IMAGES:
         save_image(filtered_image, "07-filtered")
-        cv.imshow("2- after noise removal", filtered_image)
+        plt.imshow(filtered_image)
     return filtered_image
 
 
@@ -98,7 +87,7 @@ def get_edges(image, low, high):
                      high)  # high threshold
     if SHOW_DEBUG_IMAGES:
         save_image(edges, "08-canny")
-        cv.imshow("3- canny edge detector", edges)
+        plt.imshow(edges)
     return edges
 
 
@@ -120,8 +109,8 @@ def get_masked_edges(width, height_bottom, height_top, edges, ignore_mask_color=
     if SHOW_DEBUG_IMAGES:
         save_image(mask, "09-ROI")
         save_image(masked_edges, "10-masked_edges")
-        cv.imshow("ROI", mask)
-        cv.imshow("masked edges", masked_edges)
+        plt.imshow("ROI", mask)
+        plt.imshow(masked_edges)
 
     return masked_edges
 
@@ -165,7 +154,6 @@ def get_weighted_lanes(detected_lines):
             # it means slope is negative for left line
             # left slope = delta_y --> -ve, delta_x --> +ve
             # right slope = delta_y --> -ve, delta_x --> -ve
-            print("line length:", line_length)
             if line_slope < 0:
                 left_slope_intercept.append((line_slope, line_intercept))
                 left_length.append(line_length)
@@ -234,10 +222,10 @@ def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
             cv.line(lane_image,  # source
                     (x1, y1),  # (x1, y1)
                     (x2, y2),  # (x2, y2)
-                    color,  # BGR color --> red
+                    color,  # RGB color --> red
                     thickness  # line thickness
                     )
-    cv.imshow("hough line", lane_image)
+    plt.imshow(lane_image)
     return lane_image
 
 
@@ -253,12 +241,12 @@ def draw_weighted_lanes(edges, left_coordinates, right_coordinates,
         cv.line(lane_image,  # source
                 start_coordinate,  # (x1, y1)
                 end_coordinate,  # (x2, y2)
-                color,  # BGR color --> red
+                color,  # RGB color --> red
                 thickness  # line thickness
                 )
     if SHOW_DEBUG_IMAGES:
         save_image(lane_image, "11-lanes")
-        cv.imshow("smooth lines", lane_image)
+        plt.imshow(lane_image)
     return lane_image
 
 
@@ -297,7 +285,7 @@ def lanes_detection(image):
     weighted_image = get_resultant_image(lane_image, image)
     # save_input_image(weighted_image, "hough", "result_images/")
     cv.imshow("result", weighted_image)
-    cv.waitKey(1)
+    cv.waitKey(2)
 
 
-perform_lane_detection()
+perform_lane_detection("test_videos/solidWhiteRight.mp4")
