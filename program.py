@@ -168,10 +168,8 @@ def get_weighted_lanes(detected_lines):
     # length of each line can be used as a weight
     # weight average --> (sum of product) / (sum of weight)
     # sop --> sum of product
-    sop_left = np.dot(left_length, left_slope_intercept)
-    sop_right = np.dot(right_length, right_slope_intercept)
-    left_weight = np.sum(left_length)
-    right_weight = np.sum(right_length)
+    sop_left, sop_right = np.dot(left_length, left_slope_intercept), np.dot(right_length, right_slope_intercept)
+    left_weight, right_weight = np.sum(left_length), np.sum(right_length)
     # handling cases when no line is detected by hough transform
     left_bound = len(left_length) > 0 and sop_left[0] < -0.5
     right_bound = len(right_length) > 0 and sop_right[0] > 0.5
@@ -190,11 +188,9 @@ def get_coordinates(height_bottom, height_top, left, right):
     # but since lane might be changing between the frames
     # so just get average of last 10 values
     if left is None:
-        left = [np.mean(left_slope_history[-10:]),
-                np.mean(left_intercept_history[-10:])]
+        left = [np.mean(left_slope_history[-10:]), np.mean(left_intercept_history[-10:])]
     if right is None:
-        right = [np.mean(right_slope_history[-10:]),
-                 np.mean(right_intercept_history[-10:])]
+        right = [np.mean(right_slope_history[-10:]), np.mean(right_intercept_history[-10:])]
 
     # start and end x coordinates for the lane
     # x --> (y - intercept) / slope
@@ -206,8 +202,7 @@ def get_coordinates(height_bottom, height_top, left, right):
     x_r1 = int((height_bottom - intercept) / slope)
     x_r2 = int((height_top - intercept) / slope)
     # y coordinates
-    y1 = int(height_bottom)
-    y2 = int(height_top)
+    y1, y2 = int(height_bottom), int(height_top)
     return ((x_l1, y1), (x_l2, y2)), ((x_r1, y1), (x_r2, y2))
 
 
