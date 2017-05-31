@@ -321,4 +321,3 @@ def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
 <ol>
 
 <br />
-
