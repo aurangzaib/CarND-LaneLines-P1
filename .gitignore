@@ -88,3 +88,7 @@ input_images/input-1496213064.jpg
 input_images/input-1496213065.jpg
 input_images/input-1496213066.jpg
 input_images/input-1496213067.jpg
+__pycache__/helper_functions.cpython-35.pyc
+__pycache__/logistic_classifier.cpython-35.pyc
+__pycache__/tensor_basic.cpython-35.pyc
+.vscode

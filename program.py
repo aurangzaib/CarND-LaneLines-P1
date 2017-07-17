@@ -46,6 +46,7 @@ def get_masked_image(image):
 
     # gray-scale image
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+
     # get region of image within yellow range
     mask_yellow = cv.inRange(image_hsv,
                              np.array([20, 100, 100]),  # yellow lower
@@ -58,6 +59,7 @@ def get_masked_image(image):
 
     # merge results of yellow and white - bitwise OR
     mask_hsv = cv.bitwise_or(mask_yellow, mask_white)
+
     # only retain the information of the lanes in the image - bitwise AND
     masked_image = cv.bitwise_and(image_gray, mask_hsv)
 
@@ -128,7 +130,7 @@ def get_hough_lines(image, rho=2, theta=1, voting=25,
 
 def get_weighted_lanes(detected_lines):
     # hough line transform provides several detected lines
-    # we want to reduce all the to just 2 lines
+    # we want to reduce all the lines to just 2 lines.
     # lines will be weighted w.r.t the length of the lines
     # resultant lines are called lanes (left and right)
     right_slope_intercept = []
@@ -152,8 +154,8 @@ def get_weighted_lanes(detected_lines):
             # in openCV, image is a matrix
             # bottom y values are higher than top y values
             # it means slope is negative for left line
-            # left slope = delta_y --> -ve, delta_x --> +ve
-            # right slope = delta_y --> -ve, delta_x --> -ve
+            # left slope = delta_y --> +ve, delta_x --> -ve
+            # right slope = delta_y --> +ve, delta_x --> +ve
             if line_slope < 0:
                 left_slope_intercept.append((line_slope, line_intercept))
                 left_length.append(line_length)
@@ -164,11 +166,13 @@ def get_weighted_lanes(detected_lines):
     # weighted mean
     # https://en.wikipedia.org/wiki/Weighted_arithmetic_mean
     # simple arithmetic mean doesn't take into account the ...
-    # ...significance of individual lines, which causes fluctuation & noise
+    # ...significance of individual lines, which causes fluctuation & noise.
     # length of each line can be used as a weight
-    # weight average --> (sum of product) / (sum of weight)
+    # weight average --> (sum of product of weight & variable) / (sum of weight)
     # sop --> sum of product
-    sop_left, sop_right = np.dot(left_length, left_slope_intercept), np.dot(right_length, right_slope_intercept)
+    sop_left, sop_right = np.dot(left_length, left_slope_intercept), \
+                          np.dot(right_length, right_slope_intercept)
+
     left_weight, right_weight = np.sum(left_length), np.sum(right_length)
     # handling cases when no line is detected by hough transform
     left_bound = len(left_length) > 0 and sop_left[0] < -0.5
@@ -177,33 +181,35 @@ def get_weighted_lanes(detected_lines):
     left = (sop_left / left_weight) if left_bound else None
     right = (sop_right / right_weight) if right_bound else None
     save_history(left, right)
-    # resultant is 2 lanes out of several hough lines
+    # resultant --> 2 lanes out of several hough lines
     return left, right
 
 
 def get_coordinates(height_bottom, height_top, left, right):
-    # there are cases when no no line is detected by hough
+    # there are cases when no line is detected by hough.
     # in that case we can use the history of slope and intercept
     # and get the average values from the history
     # but since lane might be changing between the frames
     # so just get average of last 10 values
     if left is None:
-        left = [np.mean(left_slope_history[-10:]), np.mean(left_intercept_history[-10:])]
+        left = [np.mean(left_slope_history[-10:]),
+                np.mean(left_intercept_history[-10:])]
     if right is None:
-        right = [np.mean(right_slope_history[-10:]), np.mean(right_intercept_history[-10:])]
+        right = [np.mean(right_slope_history[-10:]),
+                 np.mean(right_intercept_history[-10:])]
 
     # start and end x coordinates for the lane
     # x --> (y - intercept) / slope
     slope, intercept = left
-    x_l1 = int((height_bottom - intercept) / slope)
-    x_l2 = int((height_top - intercept) / slope)
+    x1_l = int((height_bottom - intercept) / slope)
+    x2_l = int((height_top - intercept) / slope)
 
     slope, intercept = right
-    x_r1 = int((height_bottom - intercept) / slope)
-    x_r2 = int((height_top - intercept) / slope)
+    x1_r = int((height_bottom - intercept) / slope)
+    x2_r = int((height_top - intercept) / slope)
     # y coordinates
     y1, y2 = int(height_bottom), int(height_top)
-    return ((x_l1, y1), (x_l2, y2)), ((x_r1, y1), (x_r2, y2))
+    return ((x1_l, y1), (x2_l, y2)), ((x1_r, y1), (x2_r, y2))
 
 
 def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
@@ -215,9 +221,9 @@ def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
     for line in lines:
         for x1, y1, x2, y2 in line:
             cv.line(lane_image,  # source
-                    (x1, y1),  # (x1, y1)
-                    (x2, y2),  # (x2, y2)
-                    color,  # RGB color --> red
+                    (x1, y1),  # start coordinates
+                    (x2, y2),  # end coordinates
+                    color,  # BGR color --> red
                     thickness  # line thickness
                     )
     plt.imshow(lane_image)
@@ -257,7 +263,8 @@ def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
 
 def lanes_detection(image):
     # STEP - 0: resize frame to better visualize
-    image = cv.resize(image, None, fx=0.5, fy=0.6, interpolation=cv.INTER_LINEAR)
+    image = cv.resize(image, None, fx=0.5, fy=0.6,
+                      interpolation=cv.INTER_LINEAR)
     # STEP - 1: get the width and height of image
     width, height_bottom, height_top = get_height_width(image)
     # STEP - 2: get the white and yellow lanes from the image
@@ -270,10 +277,11 @@ def lanes_detection(image):
     masked_edges = get_masked_edges(width, height_bottom, height_top, edges)
     # STEP - 6: find lines using hough
     hough_lines = get_hough_lines(masked_edges)
-    # STEP - 7: get left and right lanes from several hough lines
+    # STEP - 7: get left and right lanes from several hough lines -- contains slope & intercept
     left_lane, right_lane = get_weighted_lanes(hough_lines)
     # STEP - 8: get the coordinates of the left and right lanes
-    left_coordinates, right_coordinates = get_coordinates(height_bottom, height_top, left_lane, right_lane)
+    left_coordinates, right_coordinates = get_coordinates(height_bottom, height_top,
+                                                          left_lane, right_lane)
     # STEP - 9: draw lanes on a blank image
     lane_image = draw_weighted_lanes(masked_edges, left_coordinates, right_coordinates)
     # STEP - 10: draw lanes on original image
