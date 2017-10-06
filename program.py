@@ -145,7 +145,7 @@ def get_weighted_lanes(detected_lines):
                 continue
             # slope of line
             line_slope = float(y2 - y1) / float(x2 - x1)
-            # angle of deviation
+            # angle of deviation in radian
             line_angle = np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi
             # y intercept
             line_intercept = y1 - line_slope * x1
@@ -169,19 +169,20 @@ def get_weighted_lanes(detected_lines):
     # ...significance of individual lines, which causes fluctuation & noise.
     # length of each line can be used as a weight
     # weight average --> (sum of product of weight & variable) / (sum of weight)
-    # sop --> sum of product
-    sop_left, sop_right = np.dot(left_length, left_slope_intercept), \
-                          np.dot(right_length, right_slope_intercept)
+    # sop --> sum of product. contains weighted slope and intercept of left and right lanes
+    sop_left = np.dot(left_length, left_slope_intercept)
+    sop_right = np.dot(right_length, right_slope_intercept)
 
     left_weight, right_weight = np.sum(left_length), np.sum(right_length)
     # handling cases when no line is detected by hough transform
     left_bound = len(left_length) > 0 and sop_left[0] < -0.5
     right_bound = len(right_length) > 0 and sop_right[0] > 0.5
-
+    # weighted sum --> sum(length*slope_intercept)/sum(length)
     left = (sop_left / left_weight) if left_bound else None
     right = (sop_right / right_weight) if right_bound else None
     save_history(left, right)
-    # resultant --> 2 lanes out of several hough lines
+    # resultant --> 2 lanes from several hough lines
+    # each lane has weighted slope and intercept as tuple
     return left, right
 
 
@@ -203,13 +204,43 @@ def get_coordinates(height_bottom, height_top, left, right):
     slope, intercept = left
     x1_l = int((height_bottom - intercept) / slope)
     x2_l = int((height_top - intercept) / slope)
-
     slope, intercept = right
     x1_r = int((height_bottom - intercept) / slope)
     x2_r = int((height_top - intercept) / slope)
     # y coordinates
     y1, y2 = int(height_bottom), int(height_top)
     return ((x1_l, y1), (x2_l, y2)), ((x1_r, y1), (x2_r, y2))
+
+
+def draw_weighted_lanes(edges, left_coordinates, right_coordinates,
+                        color=(0, 0, 255), thickness=5):
+    # creating a blank to draw lines on
+    lane_image = np.zeros((edges.shape[0],  # --> height
+                           edges.shape[1],  # --> width
+                           3),
+                          dtype=np.uint8)
+    for coordinates in (left_coordinates, right_coordinates):
+        start_coordinate, end_coordinate = coordinates
+        cv.line(lane_image,  # source
+                start_coordinate,  # (x1, y1)
+                end_coordinate,  # (x2, y2)
+                color,  # BGR color --> red
+                thickness  # line thickness
+                )
+    if SHOW_DEBUG_IMAGES:
+        save_image(lane_image, "11-lanes")
+        plt.imshow(lane_image)
+    return lane_image
+
+
+def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
+    resultant = cv.addWeighted(source1,
+                               alpha,  # weight of the first array elements
+                               source2,  # source 2
+                               beta,  # weight of the second array elements
+                               gamma)  # scalar added to each sum
+    save_image(resultant, "12-resultant")
+    return resultant
 
 
 def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
@@ -228,37 +259,6 @@ def draw_hough_lines(edges, lines, color=(0, 0, 255), thickness=5):
                     )
     plt.imshow(lane_image)
     return lane_image
-
-
-def draw_weighted_lanes(edges, left_coordinates, right_coordinates,
-                        color=(0, 0, 255), thickness=5):
-    # creating a blank to draw lines on
-    lane_image = np.zeros((edges.shape[0],  # --> height
-                           edges.shape[1],  # --> width
-                           3),
-                          dtype=np.uint8)
-    for coordinates in (left_coordinates, right_coordinates):
-        start_coordinate, end_coordinate = coordinates
-        cv.line(lane_image,  # source
-                start_coordinate,  # (x1, y1)
-                end_coordinate,  # (x2, y2)
-                color,  # RGB color --> red
-                thickness  # line thickness
-                )
-    if SHOW_DEBUG_IMAGES:
-        save_image(lane_image, "11-lanes")
-        plt.imshow(lane_image)
-    return lane_image
-
-
-def get_resultant_image(source1, source2, alpha=0.8, beta=1, gamma=0):
-    resultant = cv.addWeighted(source1,
-                               alpha,  # weight of the first array elements
-                               source2,  # source 2
-                               beta,  # weight of the second array elements
-                               gamma)  # scalar added to each sum
-    save_image(resultant, "12-resultant")
-    return resultant
 
 
 def lanes_detection(image):
